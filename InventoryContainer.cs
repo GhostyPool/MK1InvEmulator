@@ -1,5 +1,4 @@
 ﻿using Fluxzy.Rules.Filters.ResponseFilters;
-using Newtonsoft.Json;
 using Org.BouncyCastle.Asn1.Cms;
 using System;
 using System.Collections.Generic;

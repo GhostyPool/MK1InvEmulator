@@ -12,3 +12,4 @@ This application uses the following libraries:
  - [repak](https://github.com/trumank/repak)
  - [HydraDotNet](https://github.com/TheNaeem/HydraDotNet)
  - [Clash (archived)](https://web.archive.org/web/20230401002042/https://github.com/Dreamacro/clash)
+ - [Ini parser](https://github.com/rickyah/ini-parser)
