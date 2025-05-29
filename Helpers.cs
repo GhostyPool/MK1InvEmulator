@@ -86,9 +86,9 @@ namespace Emulator
 
         public static string? providePathManually()
         {
-            printFirstBootMessage("Path could not be automatically found/is invalid. Please provide the path to your game's \\Paks folder on the next line.");
+            printFirstBootMessage("Path could not be automatically found/is invalid. Please provide the path to your game's Paks folder on the next line.");
 
-            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.ForegroundColor = ConsoleColor.DarkCyan;
             Console.Write("Pak folder path: ");
             Console.ResetColor();
 
@@ -117,7 +117,7 @@ namespace Emulator
             //Unpack game certificate
             var repakUnpack = DependencyHelpers.repakUnpack(certPakFilePath, tempFolder, AES);
 
-            if (repakUnpack == null) Environment.Exit(1);
+            if (repakUnpack == null) Debug.readLineAndExit();
 
             repakUnpack.WaitForExit();
 
@@ -125,7 +125,7 @@ namespace Emulator
             {
                 string? cert = getbase64Certificate();
 
-                if (cert == null) Environment.Exit(1);
+                if (cert == null) Debug.readLineAndExit();
 
                 //Modify game certificate collection
                 var gameCertCol = Path.Combine(tempFolder, "MK12", "Content", "Certificates", "Windows", "cacert.pem");
@@ -151,7 +151,7 @@ namespace Emulator
                 //Repack everything back
                 var repakPack = DependencyHelpers.repakRepack(tempFolder, certPakFilePath, "Zlib");
 
-                if (repakPack == null) Environment.Exit(1);
+                if (repakPack == null) Debug.readLineAndExit();
 
                 repakPack.WaitForExit();
 
@@ -380,6 +380,13 @@ namespace Emulator
         public static void exitWithError(string error)
         {
             printError(error);
+            Console.ReadLine();
+            Environment.Exit(1);
+        }
+
+        public static void readLineAndExit()
+        {
+            Console.ReadLine();
             Environment.Exit(1);
         }
 

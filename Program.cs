@@ -39,7 +39,7 @@ namespace Emulator
             Console.WriteLine("Starting clash...");
             clashProcess = DependencyHelpers.startClash(clashPort);
 
-            if (clashProcess == null) Environment.Exit(1);
+            if (clashProcess == null) Debug.readLineAndExit();
 
             Debug.printSuccess(String.Format("Clash successfully started on address 127.0.0.1:{0}", clashPort));
 

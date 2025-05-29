@@ -379,7 +379,7 @@ namespace Emulator
                 ((Dictionary<object, object?>)((Dictionary<object, object?>)profileDict["data"])["currentLevel"])["val"] = lvl;
                 debugLog("Set player level to " + lvl);
 
-                uint exp = 0;
+                ushort exp = 0;
                 ((Dictionary<object, object?>)((Dictionary<object, object?>)profileDict["data"])["experience"])["val"] = exp;
                 debugLog("Set player experience to " + exp);
 
