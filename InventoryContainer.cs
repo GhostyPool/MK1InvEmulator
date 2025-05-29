@@ -255,8 +255,8 @@ namespace Emulator
                     return null;
                 }
 
-                //Set it as favourite
-                ((Dictionary<object, object?>)item["data"])["bIsFavorite"] = true;
+                //Set new value
+                ((Dictionary<object, object?>)item["data"])["bIsFavorite"] = favItem.Value;
 
                 debugLog(String.Format("Set item {0} to value of {1}", (string)favItem.Key, ((Dictionary<object, object?>)item["data"])["bIsFavorite"]));
 
