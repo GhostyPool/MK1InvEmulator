@@ -2,7 +2,7 @@
 An inventory emulator and unlocker for Mortal Kombat 1.
 
 ## Usage
-1. Run MK1InvEmu.exe
+1. Run MK1InvEmulator.exe
 2. Follow setup instructions (Accept certificate)
 3. Launch Mortal Kombat 1
 

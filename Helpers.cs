@@ -145,8 +145,21 @@ namespace Emulator
                     Debug.exitWithError("Full error: " + ex);
                 }
 
-                //Move original pak file
-                File.Move(certPakFilePath, certPakFilePath + ".original");
+                //Move original pak file and account for already patched files
+                string originalPakBackup = certPakFilePath + ".original";
+                if (!File.Exists(originalPakBackup))
+                {
+                    File.Move(certPakFilePath, originalPakBackup);
+                }
+                else
+                {
+                    if (File.Exists(certPakFilePath))
+                    {
+                        Debug.debugLog("Detected already patched pak file, deleting...");
+                        //Delete old patched file
+                        File.Delete(certPakFilePath);
+                    }
+                }
 
                 //Repack everything back
                 var repakPack = DependencyHelpers.repakRepack(tempFolder, certPakFilePath, "Zlib");
