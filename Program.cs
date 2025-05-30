@@ -30,16 +30,17 @@ namespace Emulator
 
             Settings settings = new Settings();
 
-            //Randomize things
-            InventoryContainer.randomizeAccountId();
+            //Load inv and randomize things
+            InventoryContainer.randomizeThings();
 
             //Start clash
+            int fluxzyPort = int.TryParse(settings.SettingsData["General"]["FluxzyPort"], out int validfluxzyport) ? validfluxzyport : 8888;
             int clashPort = int.TryParse(settings.SettingsData["General"]["ClashPort"], out int validclashport) ? validclashport : 7890;
 
             Console.WriteLine("Starting clash...");
-            clashProcess = DependencyHelpers.startClash(clashPort);
+            clashProcess = DependencyHelpers.startClash(clashPort, fluxzyPort);
 
-            if (clashProcess == null) Debug.readLineAndExit();
+            if (clashProcess == null) Debug.exitWithError("Could not start clash!");
 
             Debug.printSuccess(String.Format("Clash successfully started on address 127.0.0.1:{0}", clashPort));
 
@@ -47,7 +48,6 @@ namespace Emulator
             Console.WriteLine("Starting fluxzy proxy...");
 
             //Parse some settings
-            int fluxzyPort = int.TryParse(settings.SettingsData["General"]["FluxzyPort"], out int validfluxzyport) ? validfluxzyport : 8888;
             bool firstBoot = bool.TryParse(settings.SettingsData["General"]["FirstBoot"], out bool firstBootResult) ? firstBootResult : true;
 
             if (firstBoot)
@@ -58,7 +58,7 @@ namespace Emulator
             }
 
             proxy = new PacketHandling(fluxzyPort);
-            await proxy.startProxy(new IPEndPoint(IPAddress.Loopback, clashPort));
+            await proxy.startProxy(new IPEndPoint(IPAddress.Loopback, clashPort), fluxzyPort);
 
             if (firstBoot)
             {
@@ -68,6 +68,10 @@ namespace Emulator
             Debug.printSuccess(String.Format("Fluxzy proxy successfully started on address 127.0.0.1:{0}", fluxzyPort));
 
             Debug.printSuccess("Configured clash as system-wide proxy.");
+
+            Debug.printCaution("If you shutdown your PC during app usage, your proxy settings will not be automatically reverted!");
+            Debug.printCaution("Manually turn off 'Use a proxy server' in Windows proxy settings if you cannot connect to the internet!");
+
 
             //Keep alive
             await Task.Delay(-1);
@@ -156,8 +160,8 @@ namespace Emulator
             }
             catch (Exception e)
             {
-                Debug.printError("ERROR: Could not write to settings.ini file!");
-                Debug.printError("Full error: " + e);
+                Debug.printError("Could not write to settings.ini file!");
+                Debug.printError("Full exception: " + e);
             }
         }
     }

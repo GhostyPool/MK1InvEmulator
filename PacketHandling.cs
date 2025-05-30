@@ -52,9 +52,16 @@ namespace Emulator
             proxy = new Proxy(fluxzySettings);
         }
 
-        public async Task startProxy(IPEndPoint clash)
+        public async Task startProxy(IPEndPoint clash, int fluxzyPort)
         {
-            proxy.Run();
+            try
+            {
+                proxy.Run();
+            }
+            catch
+            {
+                Debug.exitWithError(String.Format("Cannot start Fluxzy proxy on port: {0}! Make sure you aren't already running the application or have another app on the same port!", fluxzyPort));
+            }
 
             //Register as system proxy if needed
             var _ = await SystemProxyRegistrationHelper.Create(clash);
@@ -83,7 +90,7 @@ namespace Emulator
             }
             else
             {
-                Debug.printError("ERROR: Kustomize request body is null");
+                Debug.printError("Kustomize request body is null");
                 return;
             }
 
@@ -98,7 +105,7 @@ namespace Emulator
             }
             else
             {
-                Debug.printError("ERROR: There was an error generating the patched response!");
+                Debug.printError("There was an error generating the patched response!");
                 context.PreMadeResponse = null;
             }
         }

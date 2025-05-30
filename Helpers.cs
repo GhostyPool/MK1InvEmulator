@@ -132,7 +132,7 @@ namespace Emulator
 
                 if (!File.Exists(gameCertCol))
                 {
-                    Debug.exitWithError("ERROR: Game certificate collection could not be found! Try re-running the application!");
+                    Debug.exitWithError("Game certificate collection could not be found! Try re-running the application!");
                 }
 
                 try
@@ -141,7 +141,7 @@ namespace Emulator
                 }
                 catch (Exception ex)
                 {
-                    Debug.printError("ERROR: Could not write to game certificate collection file! Please restart and try again.");
+                    Debug.printError("Could not write to game certificate collection file! Please restart and try again.");
                     Debug.exitWithError("Full error: " + ex);
                 }
 
@@ -167,7 +167,8 @@ namespace Emulator
             }
             else
             {
-                Debug.exitWithError("Patching unsuccessful during unpacking! Make sure you are providing the righ AES key!");
+                Debug.printError("Patching unsuccessful during unpacking! Make sure you are providing the righ AES key!");
+                Debug.exitWithError("If your game is inside a protected folder (like Program Files), try running as admin!");
             }
         }
 
@@ -177,13 +178,13 @@ namespace Emulator
 
             if (cert == null)
             {
-                Debug.printError("ERROR: Could not retrieve fluxzy certificate!");
+                Debug.printError("Could not retrieve fluxzy certificate!");
                 return null;
             }
 
             if (!isCertInstalled(cert))
             {
-                Debug.printError("ERROR: Certificate not installed! Please press 'Yes' on the certificate pop-up when launching the application!");
+                Debug.printError("Certificate not installed! Please press 'Yes' on the certificate pop-up when launching the application!");
                 return null;
             }
 
@@ -217,7 +218,7 @@ namespace Emulator
 
     internal static class DependencyHelpers
     {
-        public static Process? startClash(int port)
+        public static Process? startClash(int clashPort, int fluxzyPort)
         {
             string configPath = @"bin\clash\config.yaml";
             string exePath = @"bin\clash\clash-win64.exe";
@@ -227,8 +228,10 @@ namespace Emulator
                 var configStream = loadYaml(configPath);
                 var config = (YamlMappingNode)configStream.Documents[0].RootNode;
 
-                //Add port from config
-                config.Children[new YamlScalarNode("mixed-port")] = new YamlScalarNode(port.ToString());
+                //Add ports from config
+                config.Children[new YamlScalarNode("mixed-port")] = new YamlScalarNode(clashPort.ToString());
+
+                addFluxzyProxyToClashConfig(config, fluxzyPort);
 
                 using (var writer = new StreamWriter(configPath))
                 {
@@ -252,8 +255,24 @@ namespace Emulator
             }
             else
             {
-                Debug.printError("ERROR: Clash dependency is missing! Please re-download the program and make sure to keep all files!");
+                Debug.printError("Clash dependency is missing! Please re-download the program and make sure to keep all files!");
                 return null;
+            }
+        }
+
+        private static void addFluxzyProxyToClashConfig(YamlMappingNode config, int fluxzyPort)
+        {
+            var proxiesNode = (YamlSequenceNode)config.Children[new YamlScalarNode("proxies")];
+
+            foreach (YamlMappingNode entries in proxiesNode)
+            {
+                var name = (YamlScalarNode)entries.Children[new YamlScalarNode("name")];
+
+                if (name.Value == "fluxzy")
+                {
+                    entries.Children[new YamlScalarNode("port")] = new YamlScalarNode(fluxzyPort.ToString());
+                    break;
+                }
             }
         }
 
@@ -288,7 +307,7 @@ namespace Emulator
             }
             else
             {
-                Debug.printError("ERROR: Repak dependency is missing! Please re-download the program and make sure to keep all files!");
+                Debug.printError("Repak dependency is missing! Please re-download the program and make sure to keep all files!");
                 return null;
             }
         }
@@ -315,7 +334,7 @@ namespace Emulator
             }
             else
             {
-                Debug.printError("ERROR: Repak dependency is missing! Please re-download the program and make sure to keep all files!");
+                Debug.printError("Repak dependency is missing! Please re-download the program and make sure to keep all files!");
                 return null;
             }
         }
@@ -323,6 +342,252 @@ namespace Emulator
 
     internal class InvHelpers
     {
+        public static bool hasEquippedItems(Dictionary<object, object?> itemDict)
+        {
+            if (((Dictionary<object, object?>)((Dictionary<object, object?>)((Dictionary<object, object?>)itemDict["data"])["slots"])["slots"]).Count > 0)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static Dictionary<object, object?> getEquippedItemsDict(Dictionary<object, object?> itemDict)
+        {
+            return (Dictionary<object, object?>)((Dictionary<object, object?>)((Dictionary<object, object?>)itemDict["data"])["slots"])["slots"];
+        }
+
+        public static bool getIsFavouriteValue(Dictionary<object, object?> itemDict)
+        {
+            return (bool)((Dictionary<object, object?>)itemDict["data"])["bIsFavorite"];
+        }
+
+        public static Dictionary<object, object?>? findItemById(string id, Object[] itemsArray)
+        {
+
+            Debug.debugLog("Item ID to look for: " + id);
+
+            for (int i = 0; i < itemsArray.Length; i++)
+            {
+                if (itemsArray[i] is Dictionary<object, object?> itemDict
+                    && itemDict.TryGetValue("id", out var itemId)
+                    && itemId is string stringId)
+                {
+
+                    if (stringId.Equals(id))
+                    {
+                        Debug.debugLog("Found item with id: " + id);
+                        return itemDict;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        public static Dictionary<object, object?>? findItemBySlugName(string slugName, Object[] itemsArray)
+        {
+            for (int i = 0; i < itemsArray.Length; i++)
+            {
+                if (itemsArray[i] is Dictionary<object, object?> itemDict
+                    && itemDict.TryGetValue("item_slug", out object itemSlug)
+                    && itemSlug is string slugString)
+                {
+                    if (slugString.Equals(slugName))
+                    {
+                        Debug.debugLog("Found item by slug: " + slugString);
+                        return itemDict;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        public static string? getItemType(Dictionary<object, object?> itemDict)
+        {
+            if (((string)itemDict["item_slug"]).Contains("Gear"))
+            {
+                return "Gear";
+            }
+            else if (((string)itemDict["item_slug"]).Contains("Skin"))
+            {
+                return "Skin";
+            }
+            else if (((string)itemDict["item_slug"]).Contains("SeasonalFatality"))
+            {
+                return "SeasonalFatality";
+            }
+
+            return null;
+        }
+
+        public static (byte lvl, ushort? exp16, uint? exp32, Dictionary<object, object?> data)? getPlayerLvlAndExp(Dictionary<object, object?> inv)
+        {
+            var current_items = (Object[])((Dictionary<object, object?>)((Dictionary<object, object?>)inv["body"])["response"])["current_items"];
+
+            var profileDict = findItemBySlugName("Profile", current_items);
+
+            if (profileDict != null)
+            {
+                var data = (Dictionary<object, object?>)profileDict["data"];
+
+                byte lvl = (byte)((Dictionary<object, object?>)data["currentLevel"])["val"];
+
+                if (((Dictionary<object, object?>)data["experience"])["val"] is ushort exp16)
+                {
+                    Debug.debugLog(String.Format("Found player level: {0} and experience of type UInt16: {1}", lvl, exp16));
+
+                    return (lvl, exp16, null, data);
+                }
+                else if (((Dictionary<object, object?>)data["experience"])["val"] is uint exp32)
+                {
+                    Debug.debugLog(String.Format("Found player level: {0} and experience of type UInt32: {1}", lvl, exp32));
+
+                    return (lvl, null, exp32, data);
+                }
+                else
+                {
+                    Debug.printError("Could not determine type of player experience!");
+                }
+            }
+            else
+            {
+                Debug.printError("Could not find player profile!");
+            }
+
+            return null;
+        }
+
+        public static void checkForUpdate(string invFolder, string invFileName, string appdataFolder)
+        {
+            bool newUser = false;
+            string updateFolder = "update";
+
+            if (!isInAppdata(invFolder, invFileName, appdataFolder))
+            {
+                string invFilePath = Path.Combine(invFolder, invFileName);
+                string updateInvFilePath = Path.Combine(updateFolder, invFileName);
+
+                if (File.Exists(invFilePath))
+                {
+                    moveToAppdata(invFilePath, Path.Combine(appdataFolder, invFilePath));
+
+                    string bakInv = Path.Combine(invFolder, "inventory.bin.bak");
+                    if (File.Exists(bakInv)) moveToAppdata(bakInv, Path.Combine(appdataFolder, bakInv));
+
+                    try
+                    {
+                        //Delete local inv folder
+                        Directory.Delete(invFolder);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.printWarning("Could not remove directory: " + invFolder);
+                        Debug.printWarning("Full exception: " + e);
+                    }
+                }
+                else if (File.Exists(updateInvFilePath))
+                {
+                    moveToAppdata(updateInvFilePath, Path.Combine(appdataFolder, invFilePath));
+                    newUser = true;
+                }
+                else
+                {
+                    Debug.exitWithError("Required file 'inventory.bin' is missing! Please re-download the program and make sure to keep all files!");
+                }
+            }
+
+            if (Directory.Exists(updateFolder))
+            {
+                if (!newUser)
+                {
+                    bool? invUpdate = checkUpdateInfo(updateFolder);
+
+                    if (!invUpdate.HasValue) return;
+
+                    if (invUpdate.Value)
+                    {
+                        Debug.printCaution("There is an update for your inventory!");
+
+                        var newInvFilePath = Path.Combine(updateFolder, invFileName);
+                        if (!File.Exists(newInvFilePath))
+                        {
+                            Debug.printWarning("Could not find new inventory file, could not perform update!");
+                            Directory.Delete(updateFolder, true);
+                            return;
+                        }
+
+                        var newInv = HydraHelpers.decodeFromHydra(File.ReadAllBytes(newInvFilePath));
+                        var oldInv = HydraHelpers.decodeFromHydra(File.ReadAllBytes(Path.Combine(appdataFolder, invFolder, invFileName)));
+
+
+                        InventoryContainer.updateInventoryToNewVersion(oldInv, newInv);
+
+                        Debug.printSuccess("Successfully updated inventory!");
+                    }
+                }
+
+                //Delete update folder
+                Debug.debugLog("Deleting update directory...");
+                Directory.Delete(updateFolder, true);
+            }
+        }
+
+        public static bool isInAppdata(string fileFolder, string fileName, string appdataFolder)
+        {
+            Debug.debugLog("Checking if inv is in appdata...");
+            if (!File.Exists(Path.Combine(appdataFolder, fileFolder, fileName)))
+            {
+                //Create inv directory
+                Directory.CreateDirectory(Path.Combine(appdataFolder, fileFolder));
+
+                return false;
+            }
+
+            Debug.debugLog("Found file in appdata folder: " + (appdataFolder + fileFolder));
+            return true;
+        }
+
+        public static void moveToAppdata(string inputFilePath, string outputFilePath)
+        {
+            if (!File.Exists(outputFilePath)
+                && File.Exists(inputFilePath))
+            {
+                Debug.debugLog(String.Format("Moving file: {0} into appdata....", inputFilePath));
+                File.Move(inputFilePath, outputFilePath);
+
+                Debug.debugLog(String.Format("Successfully moved: {0} into appdata!", inputFilePath));
+            }
+        }
+
+        public static bool? checkUpdateInfo(string updateFolder)
+        {
+            string updateFileName = "info.txt";
+            string updateFilePath = Path.Combine(updateFolder, updateFileName);
+
+            bool invUpdate = false;
+
+            if (File.Exists(updateFilePath))
+            {
+                foreach (var line in File.ReadAllLines(updateFilePath))
+                {
+                    if (line.StartsWith("invUpdate"))
+                    {
+                        invUpdate = bool.TryParse(line.Replace("invUpdate=", ""), out bool validValue) ? validValue : false;
+                        Debug.debugLog("Value of 'invUpdate' bool: " + invUpdate);
+                    }
+                }
+
+                return invUpdate;
+            }
+            else
+            {
+                Debug.printWarning("Could not read update file 'info.txt'! Your inventory may not get updated!");
+                return null;
+            }
+        }
+
         public static string generateRandomId()
         {
             byte[] bytes = new byte[12];
@@ -364,22 +629,40 @@ namespace Emulator
         {
             if (isDebugLogging())
             {
-                if (!Directory.Exists("debug")) Directory.CreateDirectory("debug");
+                string debugFolder = Path.Combine(InventoryContainer.AppdataFolder, "debug");
+                if (!Directory.Exists(debugFolder)) Directory.CreateDirectory(debugFolder);
 
-                await File.WriteAllBytesAsync(Path.Combine("debug", debugFileName), bytes);
+                await File.WriteAllBytesAsync(Path.Combine(debugFolder, debugFileName), bytes);
             }
         }
 
         public static void printError(string error)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.Error.WriteLine(error);
+            Console.Error.WriteLine("ERROR: " + error);
+            Console.ResetColor();
+        }
+
+        public static void printWarning(string warning)
+        {
+            Console.ForegroundColor = ConsoleColor.DarkYellow;
+            Console.WriteLine("WARNING: " + warning);
+            Console.ResetColor();
+        }
+
+        public static void printCaution(string caution)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("CAUTION: " + caution);
             Console.ResetColor();
         }
 
         public static void exitWithError(string error)
         {
             printError(error);
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.Error.WriteLine("Press any key to exit");
+            Console.ResetColor();
             Console.ReadLine();
             Environment.Exit(1);
         }
@@ -387,6 +670,9 @@ namespace Emulator
         public static void readLineAndExit()
         {
             Console.ReadLine();
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.Error.WriteLine("Press any key to exit");
+            Console.ResetColor();
             Environment.Exit(1);
         }
 

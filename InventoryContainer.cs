@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Xml;
 using static Emulator.Debug;
+using static Emulator.InvHelpers;
 using static HydraDotNet.Core.Models.ItemSlugsArray;
 using static HydraDotNet.Core.Models.PlayerInventoryItem;
 
@@ -18,20 +19,29 @@ namespace Emulator
 {
     internal static class InventoryContainer
     {
+        private static readonly string appdataFolder = Directory.CreateDirectory(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MK1InvEmu")).FullName;
+
         private static byte[] inventory = loadInventoryFile();
 
         private static readonly Dictionary<object, object?> inventoryDict = HydraHelpers.decodeFromHydra(inventory);
 
-        private readonly static string accountId = InvHelpers.generateRandomId();
+        private readonly static string accountId = generateRandomId();
 
         public static byte[] Inventory => inventory;
+
+        public static string AppdataFolder => appdataFolder;
         public static Dictionary<object, object?>? LastRequest { get; set; }
 
         private static byte[] loadInventoryFile()
         {
-            if (!File.Exists("inventory\\inventory.bin")) Debug.exitWithError("ERROR: Required file 'inventory.bin' is missing! Please re-download the program and make sure to keep all files!");
+            string invFolder = "inventory";
+            string invFileName = "inventory.bin";
 
-            return File.ReadAllBytes("inventory\\inventory.bin");
+            debugLog("Appdata path: " + appdataFolder);
+
+            checkForUpdate(invFolder, invFileName, appdataFolder);
+
+            return File.ReadAllBytes(Path.Combine(appdataFolder, invFolder, invFileName));
         }
 
         public static async Task<byte[]?> createKustomizeResponse()
@@ -45,7 +55,7 @@ namespace Emulator
             }
             else
             {
-                printError("ERROR: Last request was not saved or is null!");
+                printError("Last request was not saved or is null!");
                 return null;
             }
         }
@@ -154,7 +164,7 @@ namespace Emulator
             }
             else
             {
-                printError("ERROR: Current_items is not an Object[]!");
+                printError("Current_items is not an Object[]!");
             }
 
             return updatedItems;
@@ -166,11 +176,11 @@ namespace Emulator
 
             if (charDict == null)
             {
-                printError(String.Format("ERROR: Character with ID: {0} is not valid!", charId));
+                printError(String.Format("Character with ID: {0} is not valid!", charId));
                 return null;
             }
 
-            var currentSlotsDict = (Dictionary<object, object?>)((Dictionary<object, object?>)((Dictionary<object, object?>)charDict["data"])["slots"])["slots"];
+            var currentSlotsDict = getEquippedItemsDict(charDict);
 
             var slotItems = (Object[])((Dictionary<object, object?>)((Dictionary<object, object?>)((Object[])LastRequest["update_loadout"])[0])["differences"])["slotitem"];
 
@@ -184,11 +194,11 @@ namespace Emulator
 
                     if (item == null) 
                     {
-                        printError("ERROR: Item could not be found! Please restart your game if you accidentally claimed new items!");
+                        printError("Item could not be found! Please restart your game if you accidentally claimed new items!");
                         return null;
                     }
 
-                    string itemType = InventoryContainer.getItemType(item);
+                    string itemType = getItemType(item);
 
                     if (itemType == null)
                     {
@@ -251,7 +261,7 @@ namespace Emulator
 
                 if (item == null)
                 {
-                    printError("ERROR: Item could not be found! Please restart your game if you accidentally claimed new items!");
+                    printError("Item could not be found! Please restart your game if you accidentally claimed new items!");
                     return null;
                 }
 
@@ -266,104 +276,41 @@ namespace Emulator
             return updatedItems;
         }
 
-
-        private static Dictionary<object, object?>? findItemById(string id, Object[] itemsArray)
-        {
-
-            debugLog("Item ID to look for: " + id);
-
-            for (int i = 0; i < itemsArray.Length; i++)
-            {
-                if (itemsArray[i] is Dictionary<object, object?> itemDict
-                    && itemDict.TryGetValue("id", out var itemId)
-                    && itemId is string stringId)
-                {
-
-                    if (stringId.Equals(id))
-                    {
-                        debugLog("Found item with id: " + id);
-                        return itemDict;
-                    }
-                }
-            }
-
-            return null;
-        }
-
-        private static Dictionary<object, object?>? findItemBySlugName(Object[] itemsArray, string slugName)
-        {
-            for (int i = 0; i < itemsArray.Length; i++)
-            {
-                if (itemsArray[i] is Dictionary<object, object?> itemDict
-                    && itemDict.TryGetValue("item_slug", out object itemSlug)
-                    && itemSlug is string slugString)
-                {
-                    if (slugString.Equals(slugName))
-                    {
-                        debugLog("Found item by slug: " + slugString);
-                        return itemDict;
-                    }
-                }
-            }
-
-            return null;
-        }
-
-        private static string? getItemType(Dictionary<object, object?> itemDict)
-        {
-            if (((string)itemDict["item_slug"]).Contains("Gear"))
-            {
-                return "Gear";
-            }
-            else if (((string)itemDict["item_slug"]).Contains("Skin"))
-            {
-                return "Skin";
-            }
-            else if (((string)itemDict["item_slug"]).Contains("SeasonalFatality"))
-            {
-                return "SeasonalFatality";
-            }
-
-            return null;
-        }
-
         private static async void saveChanges()
         {
             //Sync inventory with dictionary version
             inventory = await HydraHelpers.encodeFromDictionary(inventoryDict);
             debugLog("Synced in-memory inventory with dictionary version");
 
-            if (!Directory.Exists("inventory"))
+            string invAppdataFolder = Path.Combine(appdataFolder, "inventory");
+
+            if (!Directory.Exists(invAppdataFolder))
             {
                 debugLog("Created inventory directory");
-                Directory.CreateDirectory("inventory");
+                Directory.CreateDirectory(invAppdataFolder);
             }
 
             //Make backup of current inv
             try
             {
-                await File.WriteAllBytesAsync("inventory\\inventory.bin.bak", inventory);
+                await File.WriteAllBytesAsync(Path.Combine(invAppdataFolder, "inventory.bin.bak"), inventory);
                 debugLog("Successfully made a backup of the current inventory");
             }
             catch (Exception ex)
             {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("WARNING: Could not save an inventory backup!");
-                Console.WriteLine("WARNING: Full exception: " + ex);
-                Console.ResetColor();
+                Debug.printWarning("Could not save an inventory backup!");
+                Debug.printWarning("Full exception: " + ex);
             }
 
             try
             {
-                await File.WriteAllBytesAsync("inventory\\inventory.bin", inventory);
+                await File.WriteAllBytesAsync(Path.Combine(invAppdataFolder, "inventory.bin"), inventory);
                 debugLog("Successfully saved inventory");
             }
             catch (Exception ex) 
             {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("WARNING: Could not save changes to inventory locally! (Your recent changes might not be retained)");
-                Console.WriteLine("WARNING: Full exception: " + ex);
-                Console.ResetColor();
+                Debug.printWarning("Could not save changes to inventory locally! (Your recent changes might not be retained)");
+                Debug.printWarning("Full exception: " + ex);
             }
         }
 
@@ -371,7 +318,7 @@ namespace Emulator
         {
             var current_items = (Object[])((Dictionary<object, object?>)((Dictionary<object, object?>)inventoryDict["body"])["response"])["current_items"];
 
-            var profileDict = findItemBySlugName(current_items, "Profile");
+            var profileDict = findItemBySlugName("Profile", current_items);
 
             if (profileDict != null)
             {
@@ -403,9 +350,7 @@ namespace Emulator
             }
             else
             {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("WARNING: Original invenory is null! Cannot sync inventory!");
-                Console.ResetColor();
+                Debug.printWarning("Original invenory is null! Cannot sync inventory!");
                 return;
             }
 
@@ -432,44 +377,137 @@ namespace Emulator
             saveChanges();
         }
 
-        private static (byte lvl, ushort? exp16, uint? exp32, Dictionary<object, object?> data)? getPlayerLvlAndExp(Dictionary<object, object?> inv)
+        public static void updateInventoryToNewVersion(Dictionary<object, object?> oldInv, Dictionary<object, object?> newInv)
         {
-            var current_items = (Object[])((Dictionary<object, object?>)((Dictionary<object, object?>)inv["body"])["response"])["current_items"];
+            var oldInvItems = (Object[])((Dictionary<object, object?>)((Dictionary<object, object?>)oldInv["body"])["response"])["current_items"];
+            var newInvItems = (Object[])((Dictionary<object, object?>)((Dictionary<object, object?>)newInv["body"])["response"])["current_items"];
 
-            var profileDict = findItemBySlugName(current_items, "Profile");
-
-            if (profileDict != null)
+            for (int i = 0; i < oldInvItems.Length; i++)
             {
-                var data = (Dictionary<object, object?>)profileDict["data"];
+                var oldItemDict = (Dictionary<object, object?>)oldInvItems[i];
 
-                byte lvl = (byte)((Dictionary<object, object?>)data["currentLevel"])["val"];
-
-                if (((Dictionary<object, object?>)data["experience"])["val"] is ushort exp16)
+                if (oldItemDict.TryGetValue("item_slug", out object slugName))
                 {
-                    debugLog(String.Format("Found player level: {0} and experience of type UInt16: {1}", lvl, exp16));
+                    if (slugName.Equals("MapMode"))
+                    {
+                        debugLog("Skipping MapMode settings...");
+                        continue;
+                    }
 
-                    return (lvl, exp16, null, data);
-                }
-                else if (((Dictionary<object, object?>)data["experience"])["val"] is uint exp32)
-                {
-                    debugLog(String.Format("Found player level: {0} and experience of type UInt32: {1}", lvl, exp32));
+                    //Check if it's favourited
+                    bool isFavourited = getIsFavouriteValue(oldItemDict);
+                    if (isFavourited)
+                    {
+                        debugLog(String.Format("Item: {0} is favourited! Updating in new inv...", (string)slugName));
 
-                    return (lvl, null, exp32, data);
-                }
-                else
-                {
-                    printError("ERROR: Could not determine type of player experience!");
+                        var newItemDict = findItemBySlugName((string)slugName, newInvItems);
+
+                        ((Dictionary<object, object?>)newItemDict["data"])["bIsFavorite"] = isFavourited;
+                    }
+
+                    //Check if there are equipped items
+                    if (hasEquippedItems(oldItemDict))
+                    {
+                        var oldEquippedItemsDict = getEquippedItemsDict(oldItemDict);
+
+                        var newItemDict = findItemBySlugName((string)slugName, newInvItems);
+
+                        var newEquippeditemsDict = getEquippedItemsDict(newItemDict);
+
+                        foreach (var itemType in oldEquippedItemsDict)
+                        {
+                            //------------------
+                            //Update item itself
+                            string oldEquippedItemId = (string)((Dictionary<object, object?>)((Object[])((Dictionary<object, object?>)oldEquippedItemsDict[itemType.Key])["items"])[0])["uniqueId"];
+                            debugLog("Old equipped item ID: " + oldEquippedItemId);
+
+                            var oldEquippedItemDict = findItemById(oldEquippedItemId, oldInvItems);
+
+                            //Use slug name if it's not found by ID
+                            if (oldEquippedItemDict == null)
+                            {
+                                oldEquippedItemDict = findItemBySlugName(oldEquippedItemId, oldInvItems);
+                            }
+
+                            //If still null, skip item
+                            if (oldEquippedItemDict == null)
+                            {
+                                printWarning("Equipped item could not be found! Skipping...");
+                                continue;
+                            }
+
+                            //Get slug name
+                            string oldEquippedItemSlug = (string)oldEquippedItemDict["item_slug"];
+                            debugLog("Old equipped item slug name: " + oldEquippedItemSlug);
+
+                            //Find new item
+                            var newItemItemToEquipId = (string)findItemBySlugName(oldEquippedItemSlug, newInvItems)["id"];
+                            debugLog("New item to equip ID: " + newItemItemToEquipId);
+
+                            ((Dictionary<object, object?>)((Object[])((Dictionary<object, object?>)newEquippeditemsDict[itemType.Key])["items"])[0])["uniqueId"] = newItemItemToEquipId;
+                            debugLog(String.Format("Set value for {0} to: {1} ", (string)itemType.Key, newItemItemToEquipId));
+
+
+                            //--------------------
+                            //Update randomize type
+                            debugLog("Type of randomizeType: " + ((Dictionary<object, object?>)oldEquippedItemsDict[itemType.Key])["randomizeType"].GetType());
+                            var oldRandomizeType = ((Dictionary<object, object?>)oldEquippedItemsDict[itemType.Key])["randomizeType"];
+
+                            ((Dictionary<object, object?>)newEquippeditemsDict[itemType.Key])["randomizeType"] = oldRandomizeType;
+                            debugLog("Set new randomizeType to: " + ((Dictionary<object, object?>)newEquippeditemsDict[itemType.Key])["randomizeType"]);
+                        }
+                    }
                 }
             }
-            else
-            {
-                printError("ERROR: Could not find player profile!");
-            }
 
-            return null;
+            debugLog("Successfully updated items!");
         }
 
-        public static void randomizeAccountId()
+        public static void randomizeThings()
+        {
+            var body = (Dictionary<object, object?>)inventoryDict["body"];
+
+            var current_items = (Object[])((Dictionary<object, object?>)body["response"])["current_items"];
+
+            randomizeAccountId(current_items);
+            //randomizeInventoryIds();
+            randomizeMapModeIds(current_items);
+            saveChanges();
+
+        }
+
+        private static void randomizeMapModeIds(Object[] current_items)
+        {
+            var mapMode = findItemBySlugName("MapMode", current_items);
+
+            if (mapMode == null) return;
+
+            var mapmodeSlots = getEquippedItemsDict(mapMode);
+
+            //Set ID in slots
+            debugLog("Current ID: " + (string)((Dictionary<object, object?>)((Object[])((Dictionary<object, object?>)mapmodeSlots["Character"])["items"])[0])["uniqueId"]);
+            ((Dictionary<object, object?>)((Object[])((Dictionary<object, object?>)mapmodeSlots["Character"])["items"])[0])["uniqueId"] = generateRandomId();
+            debugLog("Set MapMode character uniqueId to: " + ((Dictionary<object, object?>)((Object[])((Dictionary<object, object?>)mapmodeSlots["Character"])["items"])[0])["uniqueId"]);
+
+            var characterLoadouts = (Dictionary<object, object?>)((Dictionary<object, object?>)mapMode["data"])["characterLoadouts"];
+
+            //Randomize IDs for each character
+            foreach (var character in characterLoadouts)
+            {
+                var items = (Dictionary<object, object?>)((Dictionary<object, object?>)((Dictionary<object, object?>)character.Value)["slots"])["slots"];
+
+                foreach (var item in items)
+                {
+                    debugLog("Current ID: " + (string)((Dictionary<object, object?>)((Object[])((Dictionary<object, object?>)item.Value)["items"])[0])["uniqueId"]);
+                    ((Dictionary<object, object?>)((Object[])((Dictionary<object, object?>)item.Value)["items"])[0])["uniqueId"] = generateRandomId();
+                    debugLog(String.Format("Set MapMode character: {0} uniqueId to: {1} ", item.Key, (string)((Dictionary<object, object?>)((Object[])((Dictionary<object, object?>)item.Value)["items"])[0])["uniqueId"]));
+                }
+            }
+
+            debugLog("Successfully randomized MapMode IDs!");
+        }
+
+        private static void randomizeAccountId(Object[] current_items)
         {
             var body = (Dictionary<object, object?>)inventoryDict["body"];
 
@@ -480,8 +518,6 @@ namespace Emulator
 
             body["account_id"] = accountId;
 
-            var current_items = (Object[])((Dictionary<object, object?>)body["response"])["current_items"];
-
             for (int i = 0; i < current_items.Length; i++)
             {
                 if (((Dictionary<object, object?>)current_items[i]).TryGetValue("account_id", out var validAccountId))
@@ -491,15 +527,10 @@ namespace Emulator
             }
 
             debugLog("Account ID randomized successfully to: " + accountId);
-            saveChanges();
         }
 
-        public static void randomizeInventoryIds()
+        private static void randomizeInventoryIds(Object[] current_items)
         {
-            var body = (Dictionary<object, object?>)inventoryDict["body"];
-
-            var current_items = (Object[])((Dictionary<object, object?>)body["response"])["current_items"];
-
             for (int i = 0; i < current_items.Length; i++)
             {
                 if (((Dictionary<object, object?>)current_items[i]).TryGetValue("id", out var validId))
@@ -510,7 +541,6 @@ namespace Emulator
             }
 
             debugLog("Inventory IDs randomized successfully!");
-            saveChanges();
         }
     }
 }
