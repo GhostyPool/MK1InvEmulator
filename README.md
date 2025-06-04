@@ -14,9 +14,8 @@ This application uses the following libraries:
  
 ## Third-party tools used
 This application interacts with but does not include or modify the following third-party tools:
-
-    - [Clash Premium core (archived)](https://web.archive.org/web/20230401002042/https://github.com/Dreamacro/clash)
-    - [repak](https://github.com/trumank/repak)
+ - [Clash Premium core (archived)](https://web.archive.org/web/20230401002042/https://github.com/Dreamacro/clash)
+ - [repak](https://github.com/trumank/repak)
 	
 ## License
 
