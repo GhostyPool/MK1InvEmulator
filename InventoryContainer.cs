@@ -336,45 +336,40 @@ namespace Emulator
 
         public static void syncPlayerLvl(Dictionary<object, object?> originalInv)
         {
-            var customInvData = getPlayerLvlAndExp(inventoryDict);
+            PlayerStats? customInvData = getPlayerLvlAndExp(inventoryDict);
 
-            if (!customInvData.HasValue) return;
+            if (customInvData == null) return;
 
-            (byte lvl, ushort? exp16, uint? exp32, Dictionary<object, object?> data)? userInvData;
+            PlayerStats? userInvData;
 
             if (originalInv != null)
             {
                 userInvData = getPlayerLvlAndExp(originalInv);
 
-                if (!userInvData.HasValue) return;
+                if (userInvData == null) return;
             }
             else
             {
-                Debug.printWarning("Original invenory is null! Cannot sync inventory!");
+                printWarning("Original invenory is null! Cannot sync inventory!");
                 return;
             }
 
             //Sync lvl and exp
-            if (userInvData.Value.exp16.HasValue)
+            if (userInvData.data != null && userInvData.lvl != null && userInvData.exp != null)
             {
-                ((Dictionary<object, object?>)customInvData.Value.data["experience"])["val"] = userInvData.Value.exp16;
-                debugLog("Synced player experience to: " + userInvData.Value.exp16);
-            }
-            else if (userInvData.Value.exp32.HasValue)
-            {
-                ((Dictionary<object, object?>)customInvData.Value.data["experience"])["val"] = userInvData.Value.exp32;
-                debugLog("Synced player experience to: " + userInvData.Value.exp32);
+                ((Dictionary<object, object?>)customInvData.data["currentLevel"])["val"] = userInvData.lvl;
+                debugLog("Synced player level to: " + userInvData.lvl);
+
+                ((Dictionary<object, object?>)customInvData.data["experience"])["val"] = userInvData.exp;
+                debugLog("Synced player experience to: " + userInvData.exp);
+
+                saveChanges();
             }
             else
             {
-                printError("ERROR: Could not read valid experience data!");
+                printError("ERROR: Could not read valid player stats!");
                 return;
             }
-
-            ((Dictionary<object, object?>)customInvData.Value.data["currentLevel"])["val"] = userInvData.Value.lvl;
-            debugLog("Synced player level to: " + userInvData.Value.lvl);
-
-            saveChanges();
         }
 
         public static void updateInventoryToNewVersion(Dictionary<object, object?> oldInv, Dictionary<object, object?> newInv)

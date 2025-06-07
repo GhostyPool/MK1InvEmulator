@@ -435,7 +435,7 @@ namespace Emulator
             return null;
         }
 
-        public static (byte lvl, ushort? exp16, uint? exp32, Dictionary<object, object?> data)? getPlayerLvlAndExp(Dictionary<object, object?> inv)
+        public static PlayerStats? getPlayerLvlAndExp(Dictionary<object, object?> inv)
         {
             var current_items = (Object[])((Dictionary<object, object?>)((Dictionary<object, object?>)inv["body"])["response"])["current_items"];
 
@@ -445,24 +445,17 @@ namespace Emulator
             {
                 var data = (Dictionary<object, object?>)profileDict["data"];
 
-                byte lvl = (byte)((Dictionary<object, object?>)data["currentLevel"])["val"];
+                var lvl = ((Dictionary<object, object?>)data["currentLevel"])["val"];
+                var exp = ((Dictionary<object, object?>)data["experience"])["val"];
 
-                if (((Dictionary<object, object?>)data["experience"])["val"] is ushort exp16)
-                {
-                    Debug.debugLog(String.Format("Found player level: {0} and experience of type UInt16: {1}", lvl, exp16));
+                Debug.debugLog(String.Format("Found player level: {0} of type {1} and experience: {2} of type {3}", lvl, lvl.GetType(), exp, exp.GetType()));
 
-                    return (lvl, exp16, null, data);
-                }
-                else if (((Dictionary<object, object?>)data["experience"])["val"] is uint exp32)
+                return new PlayerStats
                 {
-                    Debug.debugLog(String.Format("Found player level: {0} and experience of type UInt32: {1}", lvl, exp32));
-
-                    return (lvl, null, exp32, data);
-                }
-                else
-                {
-                    Debug.printError("Could not determine type of player experience!");
-                }
+                    lvl = lvl,
+                    exp = exp,
+                    data = data
+                };
             }
             else
             {
@@ -612,6 +605,15 @@ namespace Emulator
 
             return BitConverter.ToString(bytes).Replace("-", "").ToLower();
         }
+    }
+
+    internal class PlayerStats
+    {
+        public object? lvl { get; set; }
+
+        public object? exp { get; set; }
+
+        public Dictionary<object, object?>? data = null;
     }
 
     internal class Debug
